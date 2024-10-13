@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebAssembly and Canvas Drawing</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+    }
+  </style>
+</head>
+<body>
+
+<h1>WebAssembly Canvas Interaction</h1>
+<canvas id="myCanvas" width="400" height="200"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/wabt@1.0.29/index.js"></script>
+<script>
+ const canvas = document.getElementById('myCanvas');
+ const ctx = canvas.getContext('2d');
+
+ // Helper function to convert integer color to a valid CSS color string
+ function intToColorString(colorInt) {
+     return `rgb(${colorInt & 0xff}, ${(colorInt >> 8) & 0xff}, ${(colorInt >> 16) & 0xff})`;
+ }
+
+ // JavaScript functions to interact with the canvas
+ const importObject = {
+     env: {
+         // Set the fill color (colorInt is an integer, we'll convert it to a color string)
+         setFillStyle: function(colorInt) {
+             const color = intToColorString(colorInt);
+             ctx.fillStyle = color;
+         },
+         // Draw a rectangle
+         drawRect: function(x, y, width, height) {
+             ctx.fillRect(x, y, width, height);
+         },
+         // Draw text on canvas
+         drawText: function(x, y) {
+             ctx.font = '20px Arial';
+             const textPtr = 0; // The memory location of the "Hello, World!" string
+             const text = new Uint8Array(wasmMemory.buffer, textPtr, 13); // Get "Hello, World!" string from memory
+             const textStr = new TextDecoder().decode(text);
+             ctx.fillText(textStr, x, y);
+         }
+     }
+ };
+
+ let wasmMemory;
+
+
+
+ // Load the WebAssembly module
+ fetch('main.wat')
+     .then(response => response.arrayBuffer())
+     .then(async watCode => {
+         const { parseWat } = await WabtModule();
+
+         const parsedWat = parseWat("main.wat", watCode);
+         const binaryOutput = parsedWat.toBinary({ log: true });
+         const wasmBytes = binaryOutput.buffer;
+
+         WebAssembly.instantiate(wasmBytes, importObject)
+                    .then(result => {
+                        // Store memory reference for accessing string data
+                        wasmMemory = result.instance.exports.memory;
+
+                        // Call the WebAssembly function to draw on the canvas
+                        const { renderCanvas } = result.instance.exports;
+
+                        // Render with WebAssembly: pass color as an integer, and text coordinates
+                        renderCanvas(0x00FF00, 50, 120);  // Green color, with text at (50, 120)
+                    })
+                    .catch(err => console.error("Error loading WebAssembly", err));
+
+     })
+</script>
+
+</body>
+</html>
